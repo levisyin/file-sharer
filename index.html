@@ -1,19 +1,112 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
 
 <head>
+    <meta charset="UTF-8">
     <title>File Sharer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 0;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        li {
+            background-color: #fff;
+            border: 1px solid #ccc;
+            margin: 5px;
+            padding: 10px;
+            cursor: pointer;
+        }
+
+        li:hover {
+            background-color: #f9f9f9;
+        }
+
+        input[type="file"] {
+            margin: 10px 0;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
 </head>
 
 <body>
+    <h1>File list</h1>
+    <ul id="fileList">
+        {{range .Files}}
+        <li>{{.Name}}</li>
+        {{end}}
+    </ul>
 
-    <h1>File Sharer</h1>
-    <p>A deadly simple webapp for file downloading and uploading</p>
-    <form method="post" action="http://localhost:8080/uploadFile" enctype="multipart/form-data">
-        <label>Select a File:</label>
-        </br>
-        <input type="file" name="originalFile" />
-        <input type="submit" name="submit" />
-    </form>
+    <h1>File uploader</h1>
+    <ul id="uploadFileList">
+    </ul>
+    <input type="file" id="fileInput" multiple>
+    <button id="uploadButton">Upload</button>
+
+    <script>
+        const fileList = document.getElementById("fileList");
+        const uploadFileList = document.getElementById("uploadFileList");
+        const fileInput = document.getElementById("fileInput");
+        const uploadButton = document.getElementById("uploadButton");
+
+        fileInput.addEventListener("change", () => {
+            uploadFileList.innerHTML = "";
+            for (const file of fileInput.files) {
+                const listItem = document.createElement("li");
+                listItem.textContent = file.name;
+                uploadFileList.appendChild(listItem);
+            }
+        });
+
+        uploadButton.addEventListener("click", () => {
+            var files = document.getElementById('fileInput').files;
+            console.log(files)
+            var formData = new FormData();
+
+            for (var i = 0; i < files.length; i++) {
+                formData.append('files', files[i]);
+            }
+            console.log(formData)
+
+            fetch('/uploadFile', {
+                method: 'POST',
+                body: formData
+            }).
+                then(response => response.json()).
+                then(data => {
+                    console.log('Success:', data);
+                    alert('File upload success');
+                    location.reload();
+                }).
+                catch((error) => {
+                    console.error('Error:', error);
+                    alert('File upload failed!');
+                });
+        });
+    </script>
 </body>
 
 </html>
