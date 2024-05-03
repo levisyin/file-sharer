@@ -8,6 +8,9 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
+
+	"github.com/spf13/pflag"
 )
 
 type FileInfo struct {
@@ -19,10 +22,34 @@ var (
 	homePage embed.FS
 )
 
+var (
+	addr = pflag.String("addr", ":8080", "Listen addr")
+	root = pflag.String("path", "./", "The root path to serve")
+)
+
+var (
+	serveRoot = ""
+)
+
 func main() {
+	pflag.Parse()
+	if filepath.IsAbs(*root) {
+		serveRoot = *root
+	} else {
+		pwd, err := os.Getwd()
+		if err != nil {
+			slog.With("err", err).Error("get current path error")
+			return
+		}
+		serveRoot = filepath.Join(pwd, *root)
+	}
 	http.HandleFunc("/", home)
 	http.HandleFunc("/uploadFile", uploadFile)
-	http.ListenAndServe(":8080", nil)
+	slog.Info(fmt.Sprintf("File sharer listening on %s", *addr))
+	err := http.ListenAndServe(*addr, nil)
+	if err != nil {
+		slog.With("err", err).Error("start file sharer error")
+	}
 }
 
 func home(w http.ResponseWriter, r *http.Request) {
@@ -35,14 +62,7 @@ func home(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	w.WriteHeader(http.StatusOK)
 
-	dir, err := os.Getwd()
-	if err != nil {
-		slog.With("err", err, "uri", r.RequestURI).Error("Getwd error")
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	files, err := os.ReadDir(dir)
+	files, err := os.ReadDir(serveRoot)
 	if err != nil {
 		slog.With("err", err, "uri", r.RequestURI).Error("ReadDir error")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -62,8 +82,7 @@ func home(w http.ResponseWriter, r *http.Request) {
 }
 
 func uploadFile(w http.ResponseWriter, r *http.Request) {
-	// upload size
-	err := r.ParseMultipartForm(1024000) // grab the multipart form
+	err := r.ParseMultipartForm(1024000)
 	if err != nil {
 		slog.With("err", err).Error("ParseMultipartForm error")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -74,13 +93,15 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 	for _, fileHeader := range files {
 		file, err := fileHeader.Open()
 		if err != nil {
+			slog.With("err", err).Error("Open file error")
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer file.Close()
 
-		out, err := os.Create(fileHeader.Filename)
+		out, err := os.Create(filepath.Join(serveRoot, fileHeader.Filename))
 		if err != nil {
+			slog.With("err", err).Error("Create file error")
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -88,9 +109,11 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 
 		_, err = io.Copy(out, file)
 		if err != nil {
+			slog.With("err", err).Error("Copy file error")
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		slog.With("f", fileHeader.Filename).Info("upload file success")
 	}
 	fmt.Fprintf(w, `{"code":0,"msg":"Upload file success!"}`)
 }
