@@ -21,6 +21,8 @@ type FileInfo struct {
 var (
 	//go:embed index.html
 	homePage embed.FS
+	//go:embed favicon.ico
+	favicon []byte
 )
 
 var (
@@ -47,12 +49,17 @@ func main() {
 		serveRoot = filepath.Join(pwd, *root)
 	}
 	http.HandleFunc("/", home)
+	http.HandleFunc("/favicon.ico", ico)
 	http.HandleFunc("/uploadFile", uploadFile)
 	slog.Info(fmt.Sprintf("File sharer listening on %s", *addr))
 	err := http.ListenAndServe(*addr, nil)
 	if err != nil {
 		slog.With("err", err).Error("start file sharer error")
 	}
+}
+
+func ico(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "favicon.ico")
 }
 
 func home(w http.ResponseWriter, r *http.Request) {
