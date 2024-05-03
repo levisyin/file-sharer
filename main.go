@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/common-nighthawk/go-figure"
 	"github.com/spf13/pflag"
 )
 
@@ -32,6 +33,8 @@ var (
 )
 
 func main() {
+	figure.NewFigure("File Sharer", "standard", true).Print()
+	fmt.Println()
 	pflag.Parse()
 	if filepath.IsAbs(*root) {
 		serveRoot = *root
