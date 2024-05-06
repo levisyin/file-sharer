@@ -66,7 +66,9 @@
     <h1>File list</h1>
     <ul id="fileList">
         {{range .Files}}
-        <li>{{.Name}}</li>
+        <a href="/downloadFile?file={{.Name}}" target="_blank">
+            <li>{{.Name}}</li>
+        </a>
         {{end}}
     </ul>
 
