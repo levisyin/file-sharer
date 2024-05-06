@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -26,8 +27,8 @@ var (
 )
 
 var (
-	addr = pflag.String("addr", ":8080", "Listen addr")
-	root = pflag.String("path", "./", "The root path to serve")
+	port = pflag.IntP("port", "p", 8080, "Listen addr")
+	root = pflag.String("root", "./", "The root path to serve")
 )
 
 var (
@@ -51,9 +52,30 @@ func main() {
 	http.HandleFunc("/", home)
 	http.HandleFunc("/favicon.ico", ico)
 	http.HandleFunc("/uploadFile", uploadFile)
-	slog.Info(fmt.Sprintf("File sharer listening on %s", *addr))
-	err := http.ListenAndServe(*addr, nil)
+	http.HandleFunc("/downloadFile", downloadFile)
+	interfaces, err := net.Interfaces()
 	if err != nil {
+		panic(fmt.Errorf("listing net interfaces: %w", err))
+	}
+	for _, i := range interfaces {
+		var addrs []net.Addr
+		addrs, err = i.Addrs()
+		if err != nil {
+			panic(fmt.Errorf("i.Addrs: %w", err))
+		}
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+
+			fmt.Printf("listening on: http://%s:%d\n", ip, *port)
+		}
+	}
+	if err = http.ListenAndServe(fmt.Sprintf(":%d", *port), nil); err != nil {
 		slog.With("err", err).Error("start file sharer error")
 	}
 }
@@ -126,4 +148,20 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 		slog.With("f", fileHeader.Filename).Info("upload file success")
 	}
 	fmt.Fprintf(w, `{"code":0,"msg":"Upload file success!"}`)
+}
+
+func downloadFile(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	fileName := r.URL.Query().Get("file")
+	filePath := filepath.Join(serveRoot, fileName)
+
+	_, err := os.Stat(filePath)
+	if err != nil {
+		slog.With("err", err).Error("Open file error")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Disposition", "attachment; filename="+filepath.Base(filePath))
+	http.ServeFile(w, r, filePath)
 }

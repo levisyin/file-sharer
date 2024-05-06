@@ -9,7 +9,7 @@ A deadly simple cross-platform file sharer.
 ## Features
 - [ x ] Support Download file
 - [ x ] Support upload file
-- [] Supoort log server info
+- [ x ] Supoort log server info
 - [] Support download file by scan qr-code
 - [] Support folder travel
 - [] Support drag file to upload
