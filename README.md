@@ -4,7 +4,7 @@
 A deadly simple cross-platform file sharer.
 
 ## Quickstart
-![help](help.png)
+![quickstart](help.png)
 
 ## Features
 - [x] Support Download file
