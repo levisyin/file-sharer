@@ -20,15 +20,16 @@ type FileInfo struct {
 }
 
 var (
-	//go:embed index.html
+	//go:embed index.gohtml
 	homePage embed.FS
 	//go:embed favicon.ico
 	favicon []byte
 )
 
 var (
-	port = pflag.IntP("port", "p", 8080, "Listen addr")
-	root = pflag.String("root", "./", "The root path to serve")
+	port    = pflag.IntP("port", "p", 8080, "Listen addr")
+	root    = pflag.String("root", "./", "The root path to serve")
+	advance = pflag.Bool("advance", false, "Use advance mode")
 )
 
 var (
@@ -49,10 +50,6 @@ func main() {
 		}
 		serveRoot = filepath.Join(pwd, *root)
 	}
-	http.HandleFunc("/", home)
-	http.HandleFunc("/favicon.ico", ico)
-	http.HandleFunc("/uploadFile", uploadFile)
-	http.HandleFunc("/downloadFile", downloadFile)
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		panic(fmt.Errorf("listing net interfaces: %w", err))
@@ -75,8 +72,20 @@ func main() {
 			fmt.Printf("listening on: http://%s:%d\n", ip, *port)
 		}
 	}
-	if err = http.ListenAndServe(fmt.Sprintf(":%d", *port), nil); err != nil {
-		slog.With("err", err).Error("start file sharer error")
+	if *advance {
+		http.HandleFunc("/", home)
+		http.HandleFunc("/favicon.ico", ico)
+		http.HandleFunc("/uploadFile", uploadFile)
+		http.HandleFunc("/downloadFile", downloadFile)
+		if err = http.ListenAndServe(fmt.Sprintf(":%d", *port), nil); err != nil {
+			slog.With("err", err).Error("start file sharer error")
+			return
+		}
+	} else {
+		if err = http.ListenAndServe(fmt.Sprintf(":%d", *port), http.FileServer(http.Dir(*root))); err != nil {
+			slog.With("err", err).Error("start file sharer error")
+			return
+		}
 	}
 }
 
@@ -85,9 +94,9 @@ func ico(w http.ResponseWriter, r *http.Request) {
 }
 
 func home(w http.ResponseWriter, r *http.Request) {
-	tpl, err := template.ParseFS(homePage, "index.html")
+	tpl, err := template.ParseFS(homePage, "index.gohtml")
 	if err != nil {
-		slog.With("err", err, "uri", r.RequestURI).Error("index.html not found in pages cache")
+		slog.With("err", err, "uri", r.RequestURI).Error("index page not found in pages cache")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
