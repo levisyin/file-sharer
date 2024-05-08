@@ -27,9 +27,11 @@ var (
 )
 
 var (
-	port    = pflag.IntP("port", "p", 8080, "Listen addr")
-	root    = pflag.String("root", "./", "The root path to serve")
-	advance = pflag.Bool("advance", false, "Use advance mode")
+	port         = pflag.IntP("port", "p", 8080, "Listen addr")
+	root         = pflag.String("root", "./", "The root path to serve")
+	onlyLocal    = pflag.Bool("local", false, "Only listening on local machine")
+	onlyIntranet = pflag.Bool("intranet", false, "Only listening on intranet")
+	advance      = pflag.Bool("advance", false, "Use advance mode")
 )
 
 var (
@@ -37,6 +39,7 @@ var (
 )
 
 func main() {
+	var err error
 	figure.NewFigure("File Sharer", "standard", true).Print()
 	fmt.Println()
 	pflag.Parse()
@@ -50,43 +53,61 @@ func main() {
 		}
 		serveRoot = filepath.Join(pwd, *root)
 	}
-	interfaces, err := net.Interfaces()
-	if err != nil {
-		panic(fmt.Errorf("listing net interfaces: %w", err))
-	}
-	for _, i := range interfaces {
-		var addrs []net.Addr
-		addrs, err = i.Addrs()
+	var listenAddrs string
+	switch {
+	case *onlyLocal:
+		listenAddrs = fmt.Sprintf("127.0.0.1:%d", *port)
+		fmt.Printf("listening on: http://127.0.0.1:%d\n", *port)
+	case *onlyIntranet:
+		localIP := GetLocalIP()
+		listenAddrs = fmt.Sprintf("%s:%d", localIP, *port)
+		fmt.Printf("listening on: http://%s:%d\n", localIP, *port)
+	default:
+		interfaces, err := net.Interfaces()
 		if err != nil {
-			panic(fmt.Errorf("i.Addrs: %w", err))
+			panic(fmt.Errorf("listing net interfaces: %w", err))
 		}
-		for _, addr := range addrs {
-			var ip net.IP
-			switch v := addr.(type) {
-			case *net.IPNet:
-				ip = v.IP
-			case *net.IPAddr:
-				ip = v.IP
+		for _, i := range interfaces {
+			var addrs []net.Addr
+			addrs, err = i.Addrs()
+			if err != nil {
+				panic(fmt.Errorf("i.Addrs: %w", err))
 			}
-
-			fmt.Printf("listening on: http://%s:%d\n", ip, *port)
+			for _, addr := range addrs {
+				var ip net.IP
+				switch v := addr.(type) {
+				case *net.IPNet:
+					ip = v.IP
+				case *net.IPAddr:
+					ip = v.IP
+				}
+				fmt.Printf("listening on: http://%s:%d\n", ip, *port)
+			}
 		}
+		listenAddrs = fmt.Sprintf(":%d", *port)
 	}
 	if *advance {
 		http.HandleFunc("/", home)
 		http.HandleFunc("/favicon.ico", ico)
 		http.HandleFunc("/uploadFile", uploadFile)
 		http.HandleFunc("/downloadFile", downloadFile)
-		if err = http.ListenAndServe(fmt.Sprintf(":%d", *port), nil); err != nil {
+		if err = http.ListenAndServe(listenAddrs, LoggerMiddleware(http.DefaultServeMux)); err != nil {
 			slog.With("err", err).Error("start file sharer error")
 			return
 		}
 	} else {
-		if err = http.ListenAndServe(fmt.Sprintf(":%d", *port), http.FileServer(http.Dir(*root))); err != nil {
+		if err = http.ListenAndServe(listenAddrs, http.FileServer(http.Dir(*root))); err != nil {
 			slog.With("err", err).Error("start file sharer error")
 			return
 		}
 	}
+}
+
+func LoggerMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r)
+		slog.Info(fmt.Sprintf("%s %s", r.Method, r.RequestURI))
+	})
 }
 
 func ico(w http.ResponseWriter, r *http.Request) {
