@@ -106,7 +106,8 @@ func main() {
 func LoggerMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		next.ServeHTTP(w, r)
-		slog.Info(fmt.Sprintf("%s %s", r.Method, r.RequestURI))
+		clientIP, _ := GetClientIP(r)
+		slog.Info(fmt.Sprintf("%s %s from %s", r.Method, r.RequestURI, clientIP))
 	})
 }
 
