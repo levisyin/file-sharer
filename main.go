@@ -29,7 +29,7 @@ var (
 var (
 	port         = pflag.IntP("port", "p", 8080, "Listen addr")
 	root         = pflag.String("root", "./", "The root path to serve")
-	onlyLocal    = pflag.Bool("local", false, "Only listening on local machine")
+	onlyLocal    = pflag.Bool("local", true, "Only listening on local machine")
 	onlyIntranet = pflag.Bool("intranet", false, "Only listening on intranet")
 	advance      = pflag.Bool("advance", false, "Use advance mode")
 )
