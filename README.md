@@ -15,3 +15,4 @@ A deadly simple cross-platform file sharer.
 - [ ] Support folder travel
 - [ ] Support drag file to upload
 - [ ] Support file delete and create folder?
+- [ ] Integrate https://github.com/qifi-dev/qrs
