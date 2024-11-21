@@ -40,7 +40,7 @@ var (
 
 func main() {
 	var err error
-	figure.NewFigure("File Sharer", "standard", true).Print()
+	figure.NewFigure("FileSharer", "standard", true).Print()
 	fmt.Println()
 	pflag.Parse()
 	if filepath.IsAbs(*root) {
