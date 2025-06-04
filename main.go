@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/common-nighthawk/go-figure"
 	"github.com/spf13/pflag"
@@ -43,6 +44,10 @@ func main() {
 	figure.NewFigure("FileSharer", "standard", true).Print()
 	fmt.Println()
 	pflag.Parse()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	}))
+	slog.SetDefault(logger)
 	if filepath.IsAbs(*root) {
 		serveRoot = *root
 	} else {
@@ -96,7 +101,7 @@ func main() {
 			return
 		}
 	} else {
-		if err = http.ListenAndServe(listenAddrs, http.FileServer(http.Dir(*root))); err != nil {
+		if err = http.ListenAndServe(listenAddrs, LoggerMiddleware(http.FileServer(http.Dir(*root)))); err != nil {
 			slog.With("err", err).Error("start file sharer error")
 			return
 		}
@@ -156,23 +161,43 @@ func uploadFile(w http.ResponseWriter, r *http.Request) {
 	for _, fileHeader := range files {
 		file, err := fileHeader.Open()
 		if err != nil {
-			slog.With("err", err).Error("Open file error")
+			slog.With("f", fileHeader.Filename, "err", err).Error("open file error")
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer file.Close()
 
+		slog.With("f", fileHeader.Filename).Info("uploading")
 		out, err := os.Create(filepath.Join(serveRoot, fileHeader.Filename))
 		if err != nil {
-			slog.With("err", err).Error("Create file error")
+			slog.With("f", fileHeader.Filename, "err", err).Error("create file error")
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer out.Close()
 
-		_, err = io.Copy(out, file)
+		totalSize := fileHeader.Size
+		var copied int64
+		ticker := time.NewTicker(10 * time.Second)
+		done := make(chan bool)
+
+		go func() {
+			for {
+				select {
+				case <-ticker.C:
+					progress := float64(copied) / float64(totalSize) * 100
+					slog.With("f", fileHeader.Filename, "p", fmt.Sprintf("%.2f%%", progress)).Info("uploading")
+				case <-done:
+					ticker.Stop()
+					return
+				}
+			}
+		}()
+
+		copied, err = io.Copy(out, file)
+		done <- true
 		if err != nil {
-			slog.With("err", err).Error("Copy file error")
+			slog.With("f", fileHeader.Filename, "err", err).Error("copy file error")
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -188,7 +213,7 @@ func downloadFile(w http.ResponseWriter, r *http.Request) {
 
 	_, err := os.Stat(filePath)
 	if err != nil {
-		slog.With("err", err).Error("Open file error")
+		slog.With("f", fileName, "err", err).Error("Open file error")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
